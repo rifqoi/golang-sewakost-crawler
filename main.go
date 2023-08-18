@@ -36,8 +36,16 @@ type Kost struct {
 	KamarMandi  bool   `json:"kamar_mandi,omitempty"`
 }
 
-var seenURLs map[string]bool
+func (k *Kost) ToJSON() []byte {
+	res, err := json.MarshalIndent(k, "", "  ")
+	if err != nil {
+		panic(err)
+	}
 
+	return res
+}
+
+var seenURLs map[string]bool
 var outputDir string
 
 func init() {
@@ -48,7 +56,6 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-
 }
 
 func main() {
@@ -57,8 +64,6 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	browser := rod.New().NoDefaultDevice().MustConnect().Context(ctx)
-
-	// browser.Context(ctx)
 
 	var wg sync.WaitGroup
 
@@ -85,7 +90,6 @@ func main() {
 	}
 
 	wg.Wait()
-
 }
 
 func crawlURL(urls chan<- string, page *rod.Page) {
@@ -166,7 +170,7 @@ func scrape(urlString string) {
 
 	path := parsePath(urlString)
 
-	jsonBytes := structToJSON(kost)
+	jsonBytes := kost.ToJSON()
 	filename := fmt.Sprintf("%s.json", path)
 	filename = filepath.Join(outputDir, filename)
 	writeJSON(jsonBytes, filename)
@@ -241,15 +245,6 @@ func getCommonInformation(doc *goquery.Document, kost *Kost) {
 		}
 
 	})
-}
-
-func structToJSON(kost Kost) []byte {
-	res, err := json.MarshalIndent(kost, "", "  ")
-	if err != nil {
-		panic(err)
-	}
-
-	return res
 }
 
 func writeJSON(jsonBytes []byte, fileName string) {
