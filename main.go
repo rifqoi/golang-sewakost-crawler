@@ -47,11 +47,15 @@ func (k *Kost) ToJSON() []byte {
 
 var seenURLs map[string]bool
 var outputDir string
+var logger *slog.Logger
 
 func init() {
 	now := time.Now().UTC().Format("2006-01-02")
 	syscall.Umask(0)
 	outputDir = "data/" + now
+
+	logger = getLogger()
+
 	err := os.MkdirAll(outputDir, 0755)
 	if err != nil {
 		panic(err)
@@ -101,22 +105,22 @@ func crawlURL(urls chan<- string, page *rod.Page) {
 			url := item.MustElement(".picture").MustElement("a").MustProperty("href").Str()
 
 			if strings.TrimSpace(url) == "" {
-				getLogger().Debug("URL is empty")
+				logger.Debug("URL is empty")
 				continue
 			}
 
 			if _, ok := seenURLs[url]; ok {
-				getLogger().Debug(fmt.Sprintf("%s is already visited.", url))
+				logger.Debug(fmt.Sprintf("%s is already visited.", url))
 				continue
 			}
 
 			// network sama i/o
 			select {
 			case urls <- url:
-				getLogger().Debug(fmt.Sprintf("Sent: %s", url))
+				logger.Debug(fmt.Sprintf("Sent: %s", url))
 				seenURLs[url] = true
 			default:
-				getLogger().Debug("Channel is full. Waiting the channel to be available... ")
+				logger.Debug("Channel is full. Waiting the channel to be available... ")
 
 				buffer := make([]string, 0, 10)
 				buffer = append(buffer, url)
@@ -124,10 +128,10 @@ func crawlURL(urls chan<- string, page *rod.Page) {
 				for len(buffer) > 0 {
 					select {
 					case urls <- buffer[0]:
-						getLogger().Debug(fmt.Sprintf("Sent buffered data: %s", buffer[0]))
+						logger.Debug(fmt.Sprintf("Sent buffered data: %s", buffer[0]))
 						buffer = buffer[1:]
 					default:
-						getLogger().Debug("Channel is still full. Waiting....")
+						logger.Debug("Channel is still full. Waiting....")
 						time.Sleep(time.Second)
 					}
 				}
@@ -145,14 +149,14 @@ func crawlURL(urls chan<- string, page *rod.Page) {
 
 func worker(wID int, jobs <-chan string) {
 	for j := range jobs {
-		getLogger().Debug(fmt.Sprintf("Worker %d started", wID))
+		logger.Debug(fmt.Sprintf("Worker %d started", wID))
 		scrape(j)
-		getLogger().Debug(fmt.Sprintf("Worker %d ended", wID))
+		logger.Debug(fmt.Sprintf("Worker %d ended", wID))
 	}
 }
 
 func scrape(urlString string) {
-	getLogger().Info(fmt.Sprintf("Visiting: %s", urlString))
+	logger.Info(fmt.Sprintf("Visiting: %s", urlString))
 
 	kost := Kost{}
 
@@ -181,7 +185,7 @@ func getLocations(doc *goquery.Document, kost *Kost) {
 	doc.Find("div.location").Find("div.table-cell.clearfix").Each(func(i int, s *goquery.Selection) {
 		name, ok := s.Find("div.name").Attr("title")
 		if !ok {
-			getLogger().Info(fmt.Sprintf("%s doesn't have any location", kost.URL))
+			logger.Info(fmt.Sprintf("%s doesn't have any location", kost.URL))
 			return
 		}
 		name = strings.TrimSpace(name)
@@ -212,7 +216,7 @@ func getCommonInformation(doc *goquery.Document, kost *Kost) {
 	doc.Find("div.common.row").Find("div.table-cell.clearfix").Each(func(i int, s *goquery.Selection) {
 		name, ok := s.Find("div.name").Attr("title")
 		if !ok {
-			getLogger().Info(fmt.Sprintf("%s doesn't have any common informations.", kost.URL))
+			logger.Info(fmt.Sprintf("%s doesn't have any common informations.", kost.URL))
 			return
 		}
 
@@ -249,7 +253,7 @@ func getCommonInformation(doc *goquery.Document, kost *Kost) {
 
 func writeJSON(jsonBytes []byte, fileName string) {
 	err := ioutil.WriteFile(fileName, jsonBytes, 0644)
-	getLogger().Info(fmt.Sprintf("Writing json to %s", fileName))
+	logger.Info(fmt.Sprintf("Writing json to %s", fileName))
 	if err != nil {
 		panic(err)
 	}
